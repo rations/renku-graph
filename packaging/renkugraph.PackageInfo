@@ -1,0 +1,19 @@
+name			renkugraph
+version			0.1-1
+architecture	x86_64
+summary			"Audio and MIDI patchbay for RenkuOS"
+description		"A native application that shows the Media Kit audio nodes and the
+MIDI endpoints on one canvas, connects and disconnects them by dragging wires, and
+sets the default audio devices, sample rates and buffer sizes."
+packager		"rations <ehqcar@proton.me>"
+vendor			"rations"
+copyrights {
+	"2026 rations"
+}
+licenses {
+	"MIT"
+}
+provides {
+	renkugraph = 0.1
+	app:RenkuGraph = 0.1
+}

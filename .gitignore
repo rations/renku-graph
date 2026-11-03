@@ -1,0 +1,18 @@
+# Local-only agent guidance (not published; comments in tracked files must not
+# reference these)
+CLAUDE.md
+RULES.md
+.claude/
+
+# Build artifacts
+*.o
+*.d
+objects/
+RenkuGraph
+*.hpkg
+packaging/stage/
+
+# Editor / OS noise
+*~
+*.swp
+.DS_Store
