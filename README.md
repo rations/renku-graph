@@ -10,7 +10,8 @@ the Media preferences do for routing into one native window:
   "Free Input", "Mixer Output 2", "MIDI". Hover over a jack for its raw name
   and format.
 - **Connect** by dragging a wire from a jack to a jack. **Disconnect** by
-  right-clicking the wire.
+  right-clicking the wire, or click a connected jack for a list of its
+  wires and pick the one to remove (easier on a touchpad).
 - Rename any box or jack (right-click). The names are kept between sessions.
 - Double-click a box to open its controls (its parameter web).
 - **Settings** (File ▸ Settings…): default audio output, output channel and

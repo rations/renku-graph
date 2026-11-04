@@ -324,7 +324,8 @@ MainWindow::_ShowAbout()
 		"Renku Graph\n\n"
 		"Audio and MIDI patchbay for RenkuOS.\n\n"
 		"Drag from a jack to a jack to connect.\n"
-		"Right-click a wire to disconnect it.\n"
+		"Right-click a wire to disconnect it, or click a connected jack "
+			"for a list of its wires.\n"
 		"Double-click a box for its settings.\n\n"
 		"Copyright 2026, rations. MIT License.",
 		"OK");

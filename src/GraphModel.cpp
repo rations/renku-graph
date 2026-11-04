@@ -34,7 +34,8 @@ GraphBox::GraphBox()
 	:
 	hardware(false),
 	controllable(false),
-	node(media_node::null)
+	node(media_node::null),
+	split(0)
 {
 }
 

@@ -87,6 +87,10 @@ struct GraphBox {
 			std::vector<std::unique_ptr<GraphPort>> outputs;
 
 			BRect				frame;
+			float				split;
+				// with both inputs and outputs: the width of the inputs'
+				// column on the left, the outputs being on the right;
+				// 0 when the box has only one kind
 
 			box_column			Column() const;
 };

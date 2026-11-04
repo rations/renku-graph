@@ -51,6 +51,7 @@ GraphView::GraphView(GraphModel& model, Settings& settings)
 	fNeedsFit(true),
 	fMode(kIdle),
 	fDragFromInput(false),
+	fDragMoved(false),
 	fHoverWire(-1)
 {
 	SetViewColor(B_TRANSPARENT_COLOR);
@@ -151,19 +152,37 @@ GraphView::_MeasureBox(GraphBox* box)
 	if (!box->badge.IsEmpty())
 		width = std::max(width, fSmallFont.StringWidth(box->badge) + 24);
 
+	float inputWidth = 0;
 	for (size_t i = 0; i < box->inputs.size(); i++) {
-		width = std::max(width, fPlainFont.StringWidth(
+		inputWidth = std::max(inputWidth, fPlainFont.StringWidth(
 			box->inputs[i]->label.String()) + 2 * kJackInset + 12);
 	}
+	float outputWidth = 0;
 	for (size_t i = 0; i < box->outputs.size(); i++) {
-		width = std::max(width, fPlainFont.StringWidth(
+		outputWidth = std::max(outputWidth, fPlainFont.StringWidth(
 			box->outputs[i]->label.String()) + 2 * kJackInset + 12);
 	}
 
-	width = std::min(std::max(ceilf(width), kMinBoxWidth), kMaxBoxWidth);
-	float height = _HeaderHeight(box)
-		+ (box->inputs.size() + box->outputs.size()) * fRowHeight + 6;
+	// A box with both kinds has its inputs on the left and its outputs on
+	// the right, side by side, so it is no taller than its longer list.
+	bool both = !box->inputs.empty() && !box->outputs.empty();
+	size_t rows;
+	if (both) {
+		inputWidth = std::min(ceilf(inputWidth), kMaxBoxWidth);
+		outputWidth = std::min(ceilf(outputWidth), kMaxBoxWidth);
+		width = std::max(std::max(ceilf(width), kMinBoxWidth),
+			inputWidth + outputWidth);
+		// any room to spare goes to both columns alike
+		box->split = inputWidth + (width - inputWidth - outputWidth) / 2;
+		rows = std::max(box->inputs.size(), box->outputs.size());
+	} else {
+		width = std::min(std::max(ceilf(std::max(width,
+			std::max(inputWidth, outputWidth))), kMinBoxWidth), kMaxBoxWidth);
+		box->split = 0;
+		rows = box->inputs.size() + box->outputs.size();
+	}
 
+	float height = _HeaderHeight(box) + rows * fRowHeight + 6;
 	box->frame.Set(0, 0, width, height);
 }
 
@@ -173,18 +192,23 @@ GraphView::_PlaceBox(GraphBox* box, BPoint leftTop)
 {
 	box->frame.OffsetTo(leftTop);
 
-	float y = box->frame.top + _HeaderHeight(box) + 3;
+	float top = box->frame.top + _HeaderHeight(box) + 3;
+	float split = box->split > 0 ? box->frame.left + box->split
+		: box->frame.right;
+	float y = top;
 	for (size_t i = 0; i < box->inputs.size(); i++) {
 		GraphPort* port = box->inputs[i].get();
-		port->frame.Set(box->frame.left, y, box->frame.right,
-			y + fRowHeight);
+		port->frame.Set(box->frame.left, y, split, y + fRowHeight);
 		port->dot.Set(box->frame.left, y + fRowHeight / 2);
 		y += fRowHeight;
 	}
+	if (box->split > 0)
+		y = top;
+	else
+		split = box->frame.left;
 	for (size_t i = 0; i < box->outputs.size(); i++) {
 		GraphPort* port = box->outputs[i].get();
-		port->frame.Set(box->frame.left, y, box->frame.right,
-			y + fRowHeight);
+		port->frame.Set(split, y, box->frame.right, y + fRowHeight);
 		port->dot.Set(box->frame.right, y + fRowHeight / 2);
 		y += fRowHeight;
 	}
@@ -408,7 +432,7 @@ GraphView::_DrawScene(BView* view)
 	for (size_t i = 0; i < boxes.size(); i++)
 		_DrawBox(view, boxes[i].get());
 
-	if (fMode == kDraggingWire) {
+	if (fMode == kDraggingWire && fDragMoved) {
 		GraphPort* source = _FindPort(fDragKey, fDragFromInput);
 		if (source != NULL) {
 			if (source->isInput)
@@ -524,12 +548,20 @@ GraphView::_DrawBox(BView* view, GraphBox* box)
 		/ 2);
 
 	GraphPort* target = NULL;
-	if (fMode == kDraggingWire) {
+	if (fMode == kDraggingWire && fDragMoved) {
 		GraphPort* hovered = _PortAt(fDragPoint);
 		GraphPort* source = _FindPort(fDragKey, fDragFromInput);
 		if (hovered != NULL && source != NULL
 			&& _CanConnect(source, hovered))
 			target = hovered;
+	}
+
+	if (box->split > 0) {
+		// the line between the inputs' and the outputs' columns
+		float x = frame.left + box->split;
+		view->SetHighColor(tint_color(panel, B_DARKEN_1_TINT));
+		view->StrokeLine(BPoint(x, frame.top + _HeaderHeight(box) + 3),
+			BPoint(x, frame.bottom - 3));
 	}
 
 	for (int32 side = 0; side < 2; side++) {
@@ -544,7 +576,8 @@ GraphView::_DrawBox(BView* view, GraphBox* box)
 				highlight.alpha = port == target ? 110 : 45;
 				view->SetHighColor(highlight);
 				view->FillRect(row);
-			} else if (side == 1 && !box->inputs.empty() && i == 0) {
+			} else if (side == 1 && !box->inputs.empty() && i == 0
+				&& box->split <= 0) {
 				// separate the inputs from the outputs
 				view->SetHighColor(tint_color(panel, B_DARKEN_1_TINT));
 				view->StrokeLine(row.LeftTop(), row.RightTop());
@@ -806,16 +839,14 @@ GraphView::MouseDown(BPoint where)
 
 	GraphPort* port = _PortAt(canvas);
 	if (port != NULL) {
-		if (port->kind != kMidiPort && !port->hasFree) {
-			_PostStatus("This jack is already connected and its node offers "
-				"no free one. Right-click the wire to remove it.");
-			return;
-		}
+		// Dragging from the jack draws a new wire; a click on a connected
+		// jack lists its wires to disconnect (MouseUp()).
 		fMode = kDraggingWire;
 		fDragKey = port->key;
 		fDragFromInput = port->isInput;
 		fDragPoint = canvas;
-		Invalidate();
+		fDragStart = where;
+		fDragMoved = false;
 		return;
 	}
 
@@ -849,9 +880,26 @@ GraphView::MouseMoved(BPoint where, uint32 transit,
 
 	switch (fMode) {
 		case kDraggingWire:
+		{
 			fDragPoint = canvas;
+			if (!fDragMoved) {
+				BPoint delta = where - fDragStart;
+				if (delta.x * delta.x + delta.y * delta.y < 16)
+					break;
+				fDragMoved = true;
+
+				GraphPort* source = _FindPort(fDragKey, fDragFromInput);
+				if (source != NULL && source->kind != kMidiPort
+					&& !source->hasFree) {
+					_PostStatus("This jack is already connected and its node "
+						"offers no free one. Click it to see its wires.");
+					fMode = kIdle;
+					break;
+				}
+			}
 			Invalidate();
 			break;
+		}
 
 		case kMovingBox:
 		{
@@ -929,6 +977,14 @@ GraphView::MouseUp(BPoint where)
 {
 	BPoint canvas = _ToCanvas(where);
 
+	if (fMode == kDraggingWire && !fDragMoved) {
+		GraphPort* source = _FindPort(fDragKey, fDragFromInput);
+		fMode = kIdle;
+		if (source != NULL && source->connected)
+			_ShowWireMenu(where, source);
+		return;
+	}
+
 	if (fMode == kDraggingWire) {
 		GraphPort* source = _FindPort(fDragKey, fDragFromInput);
 		GraphPort* target = _PortAt(canvas);
@@ -993,21 +1049,66 @@ GraphView::_RequestConnect(GraphPort* a, GraphPort* b)
 void
 GraphView::_RequestDisconnect(const GraphWire& wire)
 {
-	BMessage request;
+	BMessage* request = _DisconnectMessage(wire);
+	Window()->PostMessage(request);
+	delete request;
+}
+
+
+BMessage*
+GraphView::_DisconnectMessage(const GraphWire& wire)
+{
+	BMessage* request;
 	if (wire.from->kind == kMidiPort) {
-		request.what = kMsgDisconnectMidi;
-		request.AddInt32("producer", wire.from->midiID);
-		request.AddInt32("consumer", wire.to->midiID);
+		request = new BMessage(kMsgDisconnectMidi);
+		request->AddInt32("producer", wire.from->midiID);
+		request->AddInt32("consumer", wire.to->midiID);
 	} else {
-		request.what = kMsgDisconnectAudio;
-		request.AddInt32("out_node", wire.output.node.node);
-		request.AddInt32("out_port", wire.output.source.port);
-		request.AddInt32("out_id", wire.output.source.id);
-		request.AddInt32("in_node", wire.input.node.node);
-		request.AddInt32("in_port", wire.input.destination.port);
-		request.AddInt32("in_id", wire.input.destination.id);
+		request = new BMessage(kMsgDisconnectAudio);
+		request->AddInt32("out_node", wire.output.node.node);
+		request->AddInt32("out_port", wire.output.source.port);
+		request->AddInt32("out_id", wire.output.source.id);
+		request->AddInt32("in_node", wire.input.node.node);
+		request->AddInt32("in_port", wire.input.destination.port);
+		request->AddInt32("in_id", wire.input.destination.id);
 	}
-	Window()->PostMessage(&request);
+	return request;
+}
+
+
+/*!	Adds a "Disconnect from …" item for each wire of \a port. Returns
+	nothing; the menu is unchanged when the jack has no wires.
+*/
+void
+GraphView::_AddDisconnectItems(BMenu* menu, const GraphPort* port)
+{
+	std::vector<GraphWire>& wires = fModel.Wires();
+	for (size_t w = 0; w < wires.size(); w++) {
+		const GraphWire& wire = wires[w];
+		if (wire.from != port && wire.to != port)
+			continue;
+		const GraphPort* other = wire.from == port ? wire.to : wire.from;
+		BString label("Disconnect from ");
+		label << other->box->title << ": " << other->label;
+		menu->AddItem(new BMenuItem(label.String(),
+			_DisconnectMessage(wire)));
+	}
+}
+
+
+void
+GraphView::_ShowWireMenu(BPoint where, const GraphPort* port)
+{
+	BPopUpMenu* menu = new BPopUpMenu("wires", false, false);
+	_AddDisconnectItems(menu, port);
+	if (menu->CountItems() == 0) {
+		delete menu;
+		return;
+	}
+
+	menu->SetTargetForItems(Window());
+	menu->SetAsyncAutoDestruct(true);
+	menu->Go(ConvertToScreen(where), true, false, true);
 }
 
 
@@ -1020,6 +1121,10 @@ GraphView::_ShowContextMenu(BPoint where, BPoint canvas)
 	GraphBox* box = port != NULL ? port->box : _BoxAt(canvas);
 
 	if (port != NULL) {
+		_AddDisconnectItems(menu, port);
+		if (menu->CountItems() > 0)
+			menu->AddSeparatorItem();
+
 		BMessage* rename = new BMessage(kMsgRenameItem);
 		rename->AddString("key", port->key);
 		rename->AddString("current", port->label);

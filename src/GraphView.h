@@ -15,6 +15,8 @@
 
 
 class BBitmap;
+class BMenu;
+class BMessage;
 class GraphModel;
 class Settings;
 struct GraphBox;
@@ -26,7 +28,8 @@ struct GraphWire;
 	playback), rows are jacks, curves are connections.
 
 	- Drag from a jack to a jack of the other direction to connect.
-	- Right-click a wire to disconnect it.
+	- Right-click a wire to disconnect it, or click a connected jack (or
+	  right-click it) for a list of its wires to disconnect.
 	- Drag a box by its title bar; drag the background to pan; the mouse
 	  wheel zooms around the pointer.
 	- Double-click a box to open its parameters; right-click for more.
@@ -89,6 +92,11 @@ private:
 			void				_SetZoomAround(float zoom, BPoint viewPoint);
 			void				_RequestConnect(GraphPort* a, GraphPort* b);
 			void				_RequestDisconnect(const GraphWire& wire);
+			BMessage*			_DisconnectMessage(const GraphWire& wire);
+			void				_AddDisconnectItems(BMenu* menu,
+									const GraphPort* port);
+			void				_ShowWireMenu(BPoint where,
+									const GraphPort* port);
 			void				_ShowContextMenu(BPoint where,
 									BPoint canvas);
 			void				_PostStatus(const char* text);
@@ -125,6 +133,11 @@ private:
 			BString				fDragKey;
 			bool				fDragFromInput;
 			BPoint				fDragPoint;
+			BPoint				fDragStart;
+				// view coordinates where the press began
+			bool				fDragMoved;
+				// the pointer has gone far enough to draw a wire; a click
+				// on a connected jack without moving lists its wires
 			BString				fMoveKey;
 			BPoint				fMoveOffset;
 			BPoint				fLastMouse;
