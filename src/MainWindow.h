@@ -46,6 +46,7 @@ private:
 			GraphView*			fGraphView;
 			BStringView*		fStatusView;
 			BMenuItem*			fShowAllItem;
+			BMenuItem*			fShowPairsItem;
 
 			MediaWorker*		fMediaWorker;
 			MidiWorker*			fMidiWorker;

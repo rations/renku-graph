@@ -11,6 +11,8 @@
 #include <map>
 
 #include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
 
 #include "Settings.h"
 #include "Snapshot.h"
@@ -22,6 +24,7 @@ GraphPort::GraphPort()
 	kind(kAudioPort),
 	isInput(false),
 	connected(false),
+	hasFree(false),
 	midiID(-1)
 {
 }
@@ -90,8 +93,9 @@ format_tip(const media_format& format)
 
 
 /*!	"Playback 1+2" style label for a bus of a sound card, from its channel
-	count. multi_audio publishes one endpoint per bus, numbered in channel
-	order (MultiAudioNode::NodeRegistered()).
+	count. multi_audio publishes one jack per bus, numbered in channel order
+	(MultiAudioNode::NodeRegistered()); \a nextChannel counts on from one bus
+	to the next.
 */
 BString
 bus_label(const char* prefix, int32 channelCount, int32& nextChannel,
@@ -123,6 +127,157 @@ channel_count(const media_format& format)
 	if (format.type != B_MEDIA_RAW_AUDIO)
 		return 0;
 	return format.u.raw_audio.channel_count;
+}
+
+
+static int32
+jack_id(const media_input& jack)
+{
+	return jack.destination.id;
+}
+
+
+static int32
+jack_id(const media_output& jack)
+{
+	return jack.source.id;
+}
+
+
+static bool
+jack_free(const media_input& jack)
+{
+	return jack.source == media_source::null;
+}
+
+
+static bool
+jack_free(const media_output& jack)
+{
+	return jack.destination == media_destination::null;
+}
+
+
+/*!	Whether \a name is \a prefix followed by a number, which goes to
+	\a _number.
+*/
+static bool
+numbered_name(const BString& name, const char* prefix, int32& _number)
+{
+	size_t length = strlen(prefix);
+	if (strncmp(name.String(), prefix, length) != 0)
+		return false;
+
+	const char* digits = name.String() + length;
+	if (*digits < '0' || *digits > '9')
+		return false;
+	char* end;
+	long number = strtol(digits, &end, 10);
+	if (*end != '\0' || number < 0 || number > 100000)
+		return false;
+	_number = (int32)number;
+	return true;
+}
+
+
+/*!	The jacks of one name on one side of a box: one row on the canvas. */
+template<typename Jack>
+struct JackRow {
+	BString						name;
+	std::vector<const Jack*>	jacks;
+	BString						label;
+	int64						order;
+	bool						pair;
+		// a bus of two or more channels
+	bool						single;
+		// one channel of a sound card that has a jack per channel
+};
+
+
+/*!	Whether \a row is shown. A sound card that has a jack per channel also
+	has its buses (the system mixer plays stereo into "Playback 1+2"); unless
+	the user asks for them, a bus is shown only while something is connected
+	to it. A card with buses only shows them all.
+*/
+template<typename Jack>
+static bool
+row_shown(const JackRow<Jack>& row, const std::vector<JackRow<Jack>>& rows,
+	bool showPairs)
+{
+	if (showPairs || !row.pair)
+		return true;
+	for (size_t j = 0; j < row.jacks.size(); j++) {
+		if (!jack_free(*row.jacks[j]))
+			return true;
+	}
+	for (size_t i = 0; i < rows.size(); i++) {
+		if (rows[i].single)
+			return false;
+	}
+	return true;
+}
+
+
+/*!	Groups \a jacks (sorted by id) into rows by name and labels them. A sound
+	card's buses ("output 0", multi_audio's names, one per bus in channel
+	order) become "Playback 1+2"; its single channels ("playback 3", from a
+	multi_audio that offers them) become "Playback 3". Rows are ordered by
+	channel, each bus before its channels; anything else keeps its name and
+	comes last, in id order.
+*/
+template<typename Jack>
+static std::vector<JackRow<Jack>>
+jack_rows(const std::vector<const Jack*>& jacks, bool hardware,
+	const char* busPrefix, const char* channelPrefix, const char* labelPrefix)
+{
+	std::vector<JackRow<Jack>> rows;
+	std::map<BString, size_t> byName;
+	for (size_t i = 0; i < jacks.size(); i++) {
+		BString name(jacks[i]->name, B_MEDIA_NAME_LENGTH);
+		auto found = byName.find(name);
+		if (found == byName.end()) {
+			byName[name] = rows.size();
+			JackRow<Jack> row;
+			row.name = name;
+			row.pair = false;
+			row.single = false;
+			rows.push_back(row);
+			found = byName.find(name);
+		}
+		rows[found->second].jacks.push_back(jacks[i]);
+	}
+
+	const int64 kLast = (int64)1 << 40;
+	int32 nextChannel = 1;
+	for (size_t i = 0; i < rows.size(); i++) {
+		JackRow<Jack>& row = rows[i];
+		row.label = row.name;
+		row.order = kLast + (int64)i;
+		if (!hardware)
+			continue;
+
+		int32 number;
+		if (numbered_name(row.name, busPrefix, number)) {
+			int32 count = channel_count(row.jacks[0]->format);
+			int32 first = nextChannel;
+			row.label = bus_label(labelPrefix, count, nextChannel,
+				row.name.String());
+			if (count > 0)
+				row.order = (int64)first * 1024 + 1023 - count;
+			row.pair = count >= 2;
+		} else if (numbered_name(row.name, channelPrefix, number)
+			&& number > 0) {
+			row.label.SetToFormat("%s %" B_PRId32, labelPrefix, number);
+			row.order = (int64)number * 1024 + 1023 - 1;
+			row.single = true;
+		}
+	}
+
+	std::stable_sort(rows.begin(), rows.end(),
+		[](const JackRow<Jack>& a, const JackRow<Jack>& b) {
+			return a.order < b.order;
+		});
+	return rows;
 }
 
 
@@ -241,11 +396,11 @@ GraphModel::_AddMediaNodes(const MediaSnapshot* media,
 
 		std::sort(inputs.begin(), inputs.end(),
 			[](const media_input* a, const media_input* b) {
-				return a->destination.id < b->destination.id;
+				return jack_id(*a) < jack_id(*b);
 			});
 		std::sort(outputs.begin(), outputs.end(),
 			[](const media_output* a, const media_output* b) {
-				return a->source.id < b->source.id;
+				return jack_id(*a) < jack_id(*b);
 			});
 
 		// Node ids change when media services restart, names do not.
@@ -303,41 +458,64 @@ GraphModel::_AddMediaNodes(const MediaSnapshot* media,
 				outputBox->badge << ", default input";
 		}
 
-		int32 nextChannel = 1;
-		for (size_t i = 0; i < inputs.size(); i++) {
-			const media_input& input = *inputs[i];
-			BString raw(input.name, B_MEDIA_NAME_LENGTH);
-			BString label = hardware
-				? bus_label("Playback", channel_count(input.format),
-					nextChannel, raw.String())
-				: raw;
+		std::vector<JackRow<media_input>> inputRows = jack_rows(inputs,
+			hardware, "output ", "playback ", "Playback");
+		for (size_t r = 0; r < inputRows.size(); r++) {
+			const JackRow<media_input>& row = inputRows[r];
+			if (!row_shown(row, inputRows, settings.ShowPairs()))
+				continue;
 			GraphPort* port = _NewPort(inputBox, true,
-				kind_for_format(input.format), raw, label, settings);
-			port->input = input;
-			port->connected = input.source != media_source::null;
-			port->tip << raw;
-			if (entry.node.node == media->audioOutput
-				&& input.destination.id == media->audioOutputInput)
+				kind_for_format(row.jacks[0]->format), row.name, row.label,
+				settings);
+			bool defaultChannel = false;
+			for (size_t j = 0; j < row.jacks.size(); j++) {
+				const media_input& input = *row.jacks[j];
+				port->inputJacks.push_back(input);
+				if (!jack_free(input))
+					port->connected = true;
+				else if (!port->hasFree) {
+					port->input = input;
+					port->hasFree = true;
+				}
+				if (entry.node.node == media->audioOutput
+					&& input.destination.id == media->audioOutputInput)
+					defaultChannel = true;
+			}
+			if (!port->hasFree)
+				port->input = *row.jacks[0];
+
+			port->tip << row.name;
+			if (defaultChannel)
 				port->tip << " (default output channel)";
-			BString format = format_tip(input.format);
+			BString format = format_tip(row.jacks[0]->format);
 			if (!format.IsEmpty())
 				port->tip << "\n" << format;
 		}
 
-		nextChannel = 1;
-		for (size_t i = 0; i < outputs.size(); i++) {
-			const media_output& output = *outputs[i];
-			BString raw(output.name, B_MEDIA_NAME_LENGTH);
-			BString label = hardware
-				? bus_label("Capture", channel_count(output.format),
-					nextChannel, raw.String())
-				: raw;
+		std::vector<JackRow<media_output>> outputRows = jack_rows(outputs,
+			hardware, "input ", "capture ", "Capture");
+		for (size_t r = 0; r < outputRows.size(); r++) {
+			const JackRow<media_output>& row = outputRows[r];
+			if (!row_shown(row, outputRows, settings.ShowPairs()))
+				continue;
 			GraphPort* port = _NewPort(outputBox, false,
-				kind_for_format(output.format), raw, label, settings);
-			port->output = output;
-			port->connected = output.destination != media_destination::null;
-			port->tip << raw;
-			BString format = format_tip(output.format);
+				kind_for_format(row.jacks[0]->format), row.name, row.label,
+				settings);
+			for (size_t j = 0; j < row.jacks.size(); j++) {
+				const media_output& output = *row.jacks[j];
+				port->outputJacks.push_back(output);
+				if (!jack_free(output))
+					port->connected = true;
+				else if (!port->hasFree) {
+					port->output = output;
+					port->hasFree = true;
+				}
+			}
+			if (!port->hasFree)
+				port->output = *row.jacks[0];
+
+			port->tip << row.name;
+			BString format = format_tip(row.jacks[0]->format);
 			if (!format.IsEmpty())
 				port->tip << "\n" << format;
 		}
@@ -448,19 +626,30 @@ GraphModel::_AddWires(const MidiSnapshot* midi)
 		}
 	}
 
-	// Media Kit: every connected input names its source.
+	// Media Kit: every connected input jack names its source.
 	for (size_t b = 0; b < fBoxes.size(); b++) {
 		GraphBox* box = fBoxes[b].get();
 		for (size_t i = 0; i < box->inputs.size(); i++) {
 			GraphPort* to = box->inputs[i].get();
 			if (to->kind == kMidiPort || !to->connected)
 				continue;
-			for (size_t o = 0; o < mediaOutputs.size(); o++) {
-				GraphPort* from = mediaOutputs[o];
-				if (from->output.source == to->input.source
-					&& from->output.destination == to->input.destination) {
-					fWires.push_back(GraphWire{from, to});
-					break;
+			for (size_t j = 0; j < to->inputJacks.size(); j++) {
+				const media_input& input = to->inputJacks[j];
+				if (jack_free(input))
+					continue;
+				bool found = false;
+				for (size_t o = 0; o < mediaOutputs.size() && !found; o++) {
+					GraphPort* from = mediaOutputs[o];
+					for (size_t k = 0; k < from->outputJacks.size(); k++) {
+						const media_output& output = from->outputJacks[k];
+						if (output.source == input.source
+							&& output.destination == input.destination) {
+							fWires.push_back(GraphWire{from, to, output,
+								input});
+							found = true;
+							break;
+						}
+					}
 				}
 			}
 		}
@@ -482,7 +671,8 @@ GraphModel::_AddWires(const MidiSnapshot* midi)
 				continue;
 			from->second->connected = true;
 			to->second->connected = true;
-			fWires.push_back(GraphWire{from->second, to->second});
+			fWires.push_back(GraphWire{from->second, to->second,
+				media_output(), media_input()});
 		}
 	}
 }

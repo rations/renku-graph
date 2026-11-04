@@ -42,9 +42,16 @@ struct GraphPort {
 			BString				rawName;
 			BString				tip;
 
-			// Media Kit endpoint (audio and other media)
+			// Media Kit endpoints (audio and other media). A row is every jack
+			// of one name: a node can offer a jack again for each connection
+			// (multi_audio, JackDAW), and they are one place to wire to.
+			// input / output is the free one to connect, or the first one
+			// when none is free (hasFree false).
 			media_input			input;
 			media_output		output;
+			std::vector<media_input> inputJacks;
+			std::vector<media_output> outputJacks;
+			bool				hasFree;
 
 			// Midi Kit endpoint
 			int32				midiID;
@@ -88,6 +95,10 @@ struct GraphBox {
 struct GraphWire {
 			GraphPort*			from;
 			GraphPort*			to;
+
+			// the Media Kit connection this wire is
+			media_output		output;
+			media_input			input;
 };
 
 

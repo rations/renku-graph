@@ -21,6 +21,8 @@
 
 #include <string.h>
 
+#include <set>
+
 #include "GraphModel.h"
 #include "Messages.h"
 
@@ -216,9 +218,23 @@ SettingsWindow::_DefaultsView(BMessage* info)
 	int32 currentChannel = info->GetInt32("current_channel", -1);
 	int32 channelID;
 	const char* channelName;
+
+	// The system mixer plays stereo, so offer the buses. A multi_audio that
+	// gives every channel a jack of its own ("playback 3") and offers a jack
+	// again for each connection (same name, another id) lists those too.
+	BString currentName;
+	for (int32 i = 0; info->FindInt32("channel_id", i, &channelID) == B_OK
+		&& info->FindString("channel_name", i, &channelName) == B_OK; i++) {
+		if (channelID == currentChannel)
+			currentName = channelName;
+	}
+	std::set<BString> listed;
 	int32 nextChannel = 1;
 	for (int32 i = 0; info->FindInt32("channel_id", i, &channelID) == B_OK
 		&& info->FindString("channel_name", i, &channelName) == B_OK; i++) {
+		BString name(channelName);
+		if (name.StartsWith("playback ") || !listed.insert(name).second)
+			continue;
 		BMessage* message = new BMessage(kMsgSettingsChoice);
 		message->AddInt32("action", kChoiceChannel);
 		message->AddInt32("node", outputNode);
@@ -226,7 +242,7 @@ SettingsWindow::_DefaultsView(BMessage* info)
 		BString label = bus_label("Playback",
 			info->GetInt32("channel_count", i, 0), nextChannel, channelName);
 		BMenuItem* item = new BMenuItem(label.String(), message);
-		if (channelID == currentChannel)
+		if (channelID == currentChannel || name == currentName)
 			item->SetMarked(true);
 		channelMenu->AddItem(item);
 	}

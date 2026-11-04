@@ -58,6 +58,7 @@ enum {
 	kMsgFitToWindow			= 'rgFW',
 	kMsgResetLayout			= 'rgRL',
 	kMsgToggleShowAll		= 'rgSA',
+	kMsgToggleShowPairs		= 'rgSp',
 	kMsgRefresh				= 'rgRF',
 
 	// settings window internal

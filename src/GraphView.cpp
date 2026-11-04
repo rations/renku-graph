@@ -246,6 +246,39 @@ GraphView::_Layout()
 			floor = box->frame.bottom + kBoxGap;
 		}
 	}
+
+	// A box grows when its node offers more jacks, and would then cover the
+	// boxes below it. Push each box that overlaps one above it down below
+	// that one. Only the drawing moves: saved positions stay as the user set
+	// them.
+	std::vector<GraphBox*> boxes;
+	for (size_t i = 0; i < fModel.Boxes().size(); i++)
+		boxes.push_back(fModel.Boxes()[i].get());
+	std::sort(boxes.begin(), boxes.end(),
+		[](const GraphBox* a, const GraphBox* b) {
+			if (a->frame.top != b->frame.top)
+				return a->frame.top < b->frame.top;
+			return a->frame.left < b->frame.left;
+		});
+	for (size_t i = 1; i < boxes.size(); i++) {
+		GraphBox* box = boxes[i];
+		bool moved = true;
+		for (int32 pass = 0; moved && pass < 64; pass++) {
+			moved = false;
+			for (size_t j = 0; j < i; j++) {
+				const BRect& above = boxes[j]->frame;
+				if (above.Intersects(box->frame.InsetByCopy(-kBoxGap / 2,
+						-kBoxGap / 2))) {
+					_PlaceBox(box, BPoint(box->frame.left,
+						above.bottom + kBoxGap));
+					moved = true;
+				}
+			}
+		}
+		if (fSettings.Positions().find(box->key)
+				== fSettings.Positions().end())
+			fSessionPositions[box->key] = box->frame.LeftTop();
+	}
 }
 
 
@@ -697,8 +730,10 @@ GraphView::_CanConnect(const GraphPort* a, const GraphPort* b) const
 		|| a->kind != b->kind)
 		return false;
 
-	// A Media Kit endpoint takes one connection; MIDI takes many.
-	if (a->kind != kMidiPort && (a->connected || b->connected))
+	// A Media Kit jack takes one connection, so a row takes another only
+	// while it has a free jack (a node may offer a jack again for each
+	// connection). MIDI takes many.
+	if (a->kind != kMidiPort && (!a->hasFree || !b->hasFree))
 		return false;
 	return true;
 }
@@ -771,9 +806,9 @@ GraphView::MouseDown(BPoint where)
 
 	GraphPort* port = _PortAt(canvas);
 	if (port != NULL) {
-		if (port->kind != kMidiPort && port->connected) {
-			_PostStatus("This jack is already connected: a Media Kit jack "
-				"takes one wire. Right-click the wire to remove it.");
+		if (port->kind != kMidiPort && !port->hasFree) {
+			_PostStatus("This jack is already connected and its node offers "
+				"no free one. Right-click the wire to remove it.");
 			return;
 		}
 		fMode = kDraggingWire;
@@ -965,12 +1000,12 @@ GraphView::_RequestDisconnect(const GraphWire& wire)
 		request.AddInt32("consumer", wire.to->midiID);
 	} else {
 		request.what = kMsgDisconnectAudio;
-		request.AddInt32("out_node", wire.from->output.node.node);
-		request.AddInt32("out_port", wire.from->output.source.port);
-		request.AddInt32("out_id", wire.from->output.source.id);
-		request.AddInt32("in_node", wire.to->input.node.node);
-		request.AddInt32("in_port", wire.to->input.destination.port);
-		request.AddInt32("in_id", wire.to->input.destination.id);
+		request.AddInt32("out_node", wire.output.node.node);
+		request.AddInt32("out_port", wire.output.source.port);
+		request.AddInt32("out_id", wire.output.source.id);
+		request.AddInt32("in_node", wire.input.node.node);
+		request.AddInt32("in_port", wire.input.destination.port);
+		request.AddInt32("in_id", wire.input.destination.id);
 	}
 	Window()->PostMessage(&request);
 }

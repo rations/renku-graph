@@ -55,7 +55,8 @@ Settings::Settings()
 	:
 	fWindowFrame(100, 100, 1000, 700),
 	fZoom(1.0f),
-	fShowAll(false)
+	fShowAll(false),
+	fShowPairs(false)
 {
 }
 
@@ -93,6 +94,10 @@ Settings::Load()
 	if (archive.FindBool("show_all", &showAll) == B_OK)
 		fShowAll = showAll;
 
+	bool showPairs;
+	if (archive.FindBool("show_pairs", &showPairs) == B_OK)
+		fShowPairs = showPairs;
+
 	const char* key;
 	const char* name;
 	for (int32 i = 0; i < kMaxEntries
@@ -122,6 +127,7 @@ Settings::Save() const
 	archive.AddRect("window_frame", fWindowFrame);
 	archive.AddFloat("zoom", fZoom);
 	archive.AddBool("show_all", fShowAll);
+	archive.AddBool("show_pairs", fShowPairs);
 
 	for (auto it = fAliases.begin(); it != fAliases.end(); it++) {
 		archive.AddString("alias_key", it->first);

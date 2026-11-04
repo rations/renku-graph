@@ -61,6 +61,10 @@ MainWindow::MainWindow(Settings& settings)
 		new BMessage(kMsgToggleShowAll));
 	fShowAllItem->SetMarked(fSettings.ShowAll());
 	menu->AddItem(fShowAllItem);
+	fShowPairsItem = new BMenuItem("Show stereo pairs",
+		new BMessage(kMsgToggleShowPairs));
+	fShowPairsItem->SetMarked(fSettings.ShowPairs());
+	menu->AddItem(fShowPairsItem);
 	menu->AddSeparatorItem();
 	menu->AddItem(new BMenuItem("Refresh", new BMessage(kMsgRefresh), 'R'));
 	menuBar->AddItem(menu);
@@ -186,6 +190,12 @@ MainWindow::MessageReceived(BMessage* message)
 		case kMsgToggleShowAll:
 			fSettings.SetShowAll(!fSettings.ShowAll());
 			fShowAllItem->SetMarked(fSettings.ShowAll());
+			_Rebuild();
+			break;
+
+		case kMsgToggleShowPairs:
+			fSettings.SetShowPairs(!fSettings.ShowPairs());
+			fShowPairsItem->SetMarked(fSettings.ShowPairs());
 			_Rebuild();
 			break;
 

@@ -37,6 +37,10 @@ public:
 			void				SetShowAll(bool showAll)
 									{ fShowAll = showAll; }
 
+			bool				ShowPairs() const { return fShowPairs; }
+			void				SetShowPairs(bool showPairs)
+									{ fShowPairs = showPairs; }
+
 			const char*			Alias(const BString& key) const;
 			void				SetAlias(const BString& key,
 									const BString& name);
@@ -49,6 +53,7 @@ private:
 			BRect				fWindowFrame;
 			float				fZoom;
 			bool				fShowAll;
+			bool				fShowPairs;
 			std::map<BString, BString> fAliases;
 			std::map<BString, BPoint> fPositions;
 };
