@@ -1,5 +1,5 @@
 name			renkugraph
-version			0.1-1
+version			0.1-2
 architecture	x86_64
 summary			"Audio and MIDI patchbay for RenkuOS"
 description		"A native application that shows the Media Kit audio nodes and the

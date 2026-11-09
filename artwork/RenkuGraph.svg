@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Copyright 2026, rations. SPDX-License-Identifier: MIT -->
+<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 64 64">
+  <defs>
+    <linearGradient id="bodyA" x1="0" y1="6" x2="0" y2="40" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#f4f5f6"/><stop offset="1" stop-color="#b4bac1"/>
+    </linearGradient>
+    <linearGradient id="bodyB" x1="0" y1="24" x2="0" y2="58" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#ffffff"/><stop offset="1" stop-color="#c4c9cf"/>
+    </linearGradient>
+    <linearGradient id="headA" x1="0" y1="6" x2="0" y2="15" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#ffe466"/><stop offset="1" stop-color="#e0a800"/>
+    </linearGradient>
+    <linearGradient id="headB" x1="0" y1="24" x2="0" y2="33" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#ffec80"/><stop offset="1" stop-color="#f2b600"/>
+    </linearGradient>
+  </defs>
+  <rect x="28" y="8" width="34" height="34" rx="4" fill="#000" fill-opacity="0.2"/>
+  <!-- back node -->
+  <rect x="26" y="6" width="34" height="34" rx="4" fill="url(#bodyA)" stroke="#3a3f45" stroke-width="1.5"/>
+  <path d="M26,15 L26,10 A4,4 0 0 1 30,6 L56,6 A4,4 0 0 1 60,10 L60,15 Z" fill="url(#headA)" stroke="#3a3f45" stroke-width="1.5" stroke-linejoin="round"/>
+  <path d="M44,22 L54,22 M44,31 L54,31" stroke="#9aa1a9" stroke-width="2.2" stroke-linecap="round"/>
+  <!-- front node -->
+  <rect x="6" y="26" width="34" height="34" rx="4" fill="#000" fill-opacity="0.25"/>
+  <rect x="4" y="24" width="34" height="34" rx="4" fill="url(#bodyB)" stroke="#3a3f45" stroke-width="1.5"/>
+  <path d="M4,33 L4,28 A4,4 0 0 1 8,24 L34,24 A4,4 0 0 1 38,28 L38,33 Z" fill="url(#headB)" stroke="#3a3f45" stroke-width="1.5" stroke-linejoin="round"/>
+  <path d="M10,41 L22,41 M10,50 L22,50" stroke="#9aa1a9" stroke-width="2.2" stroke-linecap="round"/>
+</svg>
