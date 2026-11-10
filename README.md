@@ -1,5 +1,9 @@
 # Renku Graph
 
+> This repository is the source of the `renkugraph` package for RenkuOS. Built
+> packages are on its [Releases](https://github.com/rations/renku-graph/releases) page, and
+> [renku-audio](https://github.com/rations/renku-audio) lists the whole audio stack.
+
 An audio and MIDI patchbay for RenkuOS. It brings what Cortex, PatchBay and
 the Media preferences do for routing into one native window:
 
@@ -34,7 +38,7 @@ RenkuOS versions that include it; elsewhere the control is greyed out.
 On RenkuOS (x86_64):
 
 - From source: `./build-from-source.sh`, or just `make`.
-- Package: `packaging/make-hpkg.sh` builds `renkugraph-0.1-1-x86_64.hpkg`;
+- Package: `packaging/make-hpkg.sh` builds `renkugraph-0.1-2-x86_64.hpkg`;
   install it with `pkgman install ./renkugraph-*.hpkg`.
 
 ## License
