@@ -38,7 +38,7 @@ RenkuOS versions that include it; elsewhere the control is greyed out.
 On RenkuOS (x86_64):
 
 - From source: `./build-from-source.sh`, or just `make`.
-- Package: `packaging/make-hpkg.sh` builds `renkugraph-0.1-2-x86_64.hpkg`;
+- Package: `packaging/make-hpkg.sh` builds `renkugraph-0.1-3-x86_64.hpkg`;
   install it with `pkgman install ./renkugraph-*.hpkg`.
 
 ## License

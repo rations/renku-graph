@@ -6,7 +6,7 @@ set -e
 HERE=$(cd "$(dirname "$0")" && pwd)
 ROOT=$(cd "$HERE/.." && pwd)
 VERSION=0.1
-REVISION=2
+REVISION=3
 STAGE="$HERE/stage"
 
 cd "$ROOT"

@@ -1,5 +1,5 @@
 name			renkugraph
-version			0.1-2
+version			0.1-3
 architecture	x86_64
 summary			"Audio and MIDI patchbay for RenkuOS"
 description		"A native application that shows the Media Kit audio nodes and the
@@ -16,4 +16,10 @@ licenses {
 provides {
 	renkugraph = 0.1
 	app:RenkuGraph = 0.1
+}
+requires {
+	haiku
+}
+urls {
+	"https://github.com/rations/renku-graph"
 }
